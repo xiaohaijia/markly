@@ -1,0 +1,8 @@
+node_modules
+.output
+.wxt
+release
+artifacts
+test-results
+playwright-report
+pnpm-lock.yaml

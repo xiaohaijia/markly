@@ -1,0 +1,2 @@
+152.0.7977.82
+Local HTML: activate, save, reload and restore passed.

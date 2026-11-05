@@ -1,0 +1,121 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { finishDrawing, resolveDrawing } from "../lib/drawing";
+import { drawingSchema } from "../lib/model";
+function rect(el: Element, left = 10, top = 20, width = 400, height = 300) {
+  vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON() {},
+  });
+}
+beforeEach(() => {
+  document.body.innerHTML = "";
+});
+it("tracks the anchor's internal scroll after serialization and refresh", () => {
+  document.body.innerHTML = '<div id="scroll">Stable content</div>';
+  const el = document.querySelector("div")!;
+  rect(el);
+  el.scrollTop = 30;
+  const d = drawingSchema.parse(
+    finishDrawing(
+      "rect",
+      [
+        [30, 50, 0.5],
+        [60, 80, 0.5],
+      ],
+      el,
+    ),
+  );
+  el.scrollTop = 90;
+  expect(resolveDrawing(d).points[0]).toEqual([30, -10, 0.5]);
+  rect(el, 10, 120);
+  expect(resolveDrawing(d).points[0]).toEqual([30, 90, 0.5]);
+});
+it("keeps a live anchor when sibling insertion changes its CSS path", () => {
+  document.body.innerHTML = "<p>original</p>";
+  const el = document.querySelector("p")!;
+  rect(el);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  resolveDrawing(d);
+  el.insertAdjacentHTML("beforebegin", "<p>different</p>");
+  expect(resolveDrawing(d).points[0]).toEqual([30, 50, 0.5]);
+});
+it("uses the post permalink when counters change, but rejects a recycled post", () => {
+  document.body.innerHTML =
+    '<article><a href="https://x.com/test/status/123"><time>today</time></a><p>Post</p><span>1 like</span></article>';
+  const el = document.querySelector("article")!;
+  rect(el);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  el.querySelector("span")!.textContent = "2 likes";
+  expect(resolveDrawing(d).points).toHaveLength(2);
+  el.querySelector("a")!.href = "https://x.com/test/status/456";
+  expect(resolveDrawing(d).uncertain).toBe(true);
+  expect(resolveDrawing(d).points).toHaveLength(0);
+});
+it("reattaches a temporarily removed element only to a unique match", () => {
+  document.body.innerHTML = "<p>original</p>";
+  const el = document.querySelector("p")!;
+  rect(el);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  el.remove();
+  expect(resolveDrawing(d).uncertain).toBe(true);
+  document.body.append(el);
+  rect(el, 10, 70);
+  expect(resolveDrawing(d).points[0]).toEqual([30, 100, 0.5]);
+});
+it("loads older drawings without new optional anchor fields", () => {
+  expect(
+    drawingSchema.safeParse({
+      tool: "pen",
+      points: [[10, 20, 0.5]],
+      origin: [0, 0],
+      viewport: [1200, 800],
+    }).success,
+  ).toBe(true);
+});
+
+it("stores unscaled element content coordinates and follows transform scale changes", () => {
+  document.body.innerHTML = "<p>scaled content</p>";
+  const el = document.querySelector("p")!;
+  Object.defineProperty(el, "offsetWidth", { value: 400 });
+  Object.defineProperty(el, "offsetHeight", { value: 300 });
+  rect(el, 10, 20, 200, 150);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  expect(d.coordinateSpace).toBe("element-content-v2");
+  rect(el, 10, 20, 400, 300);
+  expect(resolveDrawing(d).points[0]).toEqual([50, 80, 0.5]);
+});

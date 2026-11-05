@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self';"
+    />
+    <title>Markly Runtime Matrix</title>
+    <link rel="stylesheet" href="runtime.css" />
+  </head>
+  <body>
+    <main id="shell">
+      <div id="scroller">
+        <article id="article">
+          <p id="target">
+            A stable paragraph for reading and annotation across different page
+            layouts.
+          </p>
+          <p>Second paragraph with useful context.</p>
+          <div class="space"></div>
+        </article>
+      </div>
+      <input placeholder="Host input" /><a href="#footer" id="host-link"
+        >Host link</a
+      >
+    </main>
+    <footer id="footer">Footer</footer>
+    <script src="runtime.js"></script>
+  </body>
+</html>

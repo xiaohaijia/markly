@@ -1,0 +1,40 @@
+{
+  "name": "markly",
+  "version": "0.2.7",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.7.0",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build && node scripts/verify-build.mjs",
+    "zip": "wxt zip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "postinstall": "wxt prepare",
+    "format": "prettier --write .",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
+    "dexie": "4.4.5",
+    "perfect-freehand": "1.2.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.5.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@wxt-dev/module-react": "1.2.2",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.0.1",
+    "prettier": "3.9.6",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "vitest": "5.0.0",
+    "wxt": "0.21.4"
+  }
+}

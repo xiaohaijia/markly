@@ -1,0 +1,67 @@
+html {
+  background: #faf9f6;
+}
+body {
+  margin: 0;
+  font: 18px/1.6 sans-serif;
+  min-height: 1800px;
+}
+#shell {
+  margin: 50px;
+  width: 740px;
+}
+#scroller {
+  height: 350px;
+  overflow: auto;
+  border: 2px solid #aabb99;
+  transform-origin: top left;
+}
+article {
+  padding: 24px;
+  background: white;
+}
+#target {
+  margin: 30px 0;
+  padding: 8px;
+}
+.space {
+  height: 550px;
+}
+footer {
+  margin-top: 800px;
+}
+dialog {
+  width: 750px;
+  height: 500px;
+}
+html.root-transform {
+  transform: translate(32px, 24px) scale(0.85);
+  transform-origin: top left;
+}
+html.root-zoom {
+  zoom: 1.25;
+}
+body.fixed-overlay {
+  height: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+body.fixed-overlay #shell {
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+body.fixed-overlay #scroller {
+  position: fixed;
+  top: 80px;
+  left: 50px;
+  width: 740px;
+}
+body.element-scale #scroller {
+  transform: scale(0.8);
+}
+markly-extension {
+  font-size: 48px !important;
+  direction: rtl !important;
+  line-height: 4 !important;
+}

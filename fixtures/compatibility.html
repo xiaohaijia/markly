@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><title>Markly 动态页面回归</title>
+  <style>
+    body {
+      margin: 0;
+      transform: translateZ(0);
+      font: 18px/1.6 sans-serif;
+      background: #faf9f6;
+      min-height: 2000px;
+    }
+    main {
+      margin: 40px;
+      width: 750px;
+    }
+    #scroll {
+      height: 380px;
+      overflow: auto;
+      border: 1px solid #ddd;
+      padding: 20px;
+    }
+    article {
+      height: 600px;
+      padding: 20px;
+      background: white;
+    }
+    #copy {
+      margin-top: 70px;
+    }
+    .spacer {
+      height: 280px;
+    }
+  </style>
+  <main>
+    <h1>真实页面结构回归</h1>
+    <p>包含 transform 宿主、内部滚动和动态内容。</p>
+    <div id="scroll">
+      <article>
+        <a href="https://x.com/test/status/123"
+          ><time>2026 年 9 月 9 日</time></a
+        >
+        <p id="copy">这段原文用于检验标注跟随滚动，页面更新后仍然定位正确。</p>
+        <span id="count">1 次喜欢</span>
+        <div class="spacer"></div>
+        <p>底部内容</p>
+      </article>
+    </div>
+    <p>
+      <input placeholder="网页输入框" /><a id="page-link" href="#end"
+        >网页链接</a
+      >
+    </p>
+    <p id="end">页尾</p>
+  </main>
+</html>
