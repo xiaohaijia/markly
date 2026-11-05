@@ -90,7 +90,7 @@ async function select(page: Page, selector: string, text?: string) {
     document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
   }, text);
 }
-test("extension workflows and screenshots", async () => {
+test("extension workflows", async () => {
   const history = await context.newPage();
   await history.goto(
     `chrome-extension://${extensionId}/library.html?site=${encodeURIComponent(article)}`,
@@ -154,18 +154,12 @@ test("extension workflows and screenshots", async () => {
   await expect(page.getByTestId("drawing-layer")).toHaveCount(0);
   await page.getByRole("button", { name: "显示标记", exact: true }).click();
   await page.getByPlaceholder("这里不应弹出划词工具条").fill("网页输入正常");
-  await page
-    .getByRole("complementary", { name: "我的标记" })
-    .screenshot({ path: "artifacts/page-index.png" });
-  await page.screenshot({ path: "artifacts/extension-desktop.png" });
   await history.reload();
   await history.getByRole("textbox", { name: "搜索全部标记" }).fill("完成任务");
   await expect(
     history.getByText("从回答问题，走向完成任务。", { exact: true }),
   ).toBeVisible();
-  await history.screenshot({ path: "artifacts/history-desktop.png" });
   await page.setViewportSize({ width: 600, height: 850 });
-  await page.screenshot({ path: "artifacts/extension-narrow.png" });
   const panel = await page
     .getByRole("complementary", { name: "我的标记" })
     .boundingBox();
@@ -364,7 +358,6 @@ test("local HTML permission, drawing restore and nested scrolling", async () => 
     .click();
   await expect(page.getByTestId("annotation-card")).toHaveCount(3);
   await expect(page.getByText("原文待定位", { exact: true })).toHaveCount(0);
-  await page.screenshot({ path: "artifacts/local-html.png" });
   await page.close();
   await settings.close();
 });
@@ -520,7 +513,6 @@ test("transformed host, nested scroll, compact notes and text editor regression"
   await expect(editor).toBeFocused();
   await expect(page.getByRole("textbox", { name: "备注内容" })).toHaveCount(0);
   await editor.fill("第一行文字\n第二行文字");
-  await page.screenshot({ path: "artifacts/text-editor-fixed.png" });
   await page.getByRole("button", { name: "保存文字", exact: true }).click();
   await expect(
     page.getByTestId("drawing-layer").locator("text tspan"),
@@ -645,7 +637,6 @@ for (const mode of [
         })
         .toBeLessThan(1.5);
     }
-    await page.screenshot({ path: `artifacts/runtime-${mode}.png` });
     await page.reload();
     await page
       .getByRole("button", { name: "显示 / 收起批注面板", exact: true })
@@ -758,7 +749,6 @@ test("placed note stays at clicked content through scroll and reload", async () 
   const editorBox = (await card.boundingBox())!;
   expect(Math.abs(editorBox.x - x)).toBeLessThan(30);
   await page.getByRole("textbox", { name: "备注内容" }).fill(sample);
-  await card.screenshot({ path: "artifacts/note-composer.png" });
   await page.getByRole("button", { name: "保存备注" }).click();
   const marker = page.getByRole("button", { name: "查看备注", exact: true });
   await expect(marker).toHaveCount(1);
@@ -787,7 +777,6 @@ test("placed note stays at clicked content through scroll and reload", async () 
   expect(
     Math.abs(previewBox.y + previewBox.height / 2 - after.y - after.height / 2),
   ).toBeLessThan(3);
-  await preview.screenshot({ path: "artifacts/note-reader.png" });
   await expect(preview).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(preview).toHaveCount(0);
@@ -804,7 +793,6 @@ test("placed note stays at clicked content through scroll and reload", async () 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("textbox", { name: "备注内容" })).toHaveCount(0);
   await expect(marker).toHaveCount(1);
-  await page.screenshot({ path: "artifacts/placed-note.png" });
   await page.close();
 });
 
