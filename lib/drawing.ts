@@ -26,7 +26,6 @@ export function bounds(points: Point[]) {
 }
 function identity(el: Element): string | undefined {
   // A post permalink survives changing reaction counts and virtualized remounts.
-  if (!el.matches("article")) return undefined;
   return contentIdentity(el);
 }
 export function elementFor(x: number, y: number): Element | null {
@@ -109,16 +108,9 @@ export function finishDrawing(
   };
 }
 const liveAnchors = new WeakMap<Drawing, Element>();
-export function resolveDrawing(d: Drawing): {
-  points: Point[];
-  uncertain: boolean;
-  clip?: ReturnType<typeof visibleClip>;
-} {
-  if (!d.element)
-    return {
-      points: d.points.map(([x, y, p]) => [x - scrollX, y - scrollY, p]),
-      uncertain: Math.abs(innerWidth / d.viewport[0] - 1) > 0.15,
-    };
+/** Editing and painting must use the same identity-validated element. */
+export function drawingElement(d: Drawing): Element | null {
+  if (!d.element) return null;
   let el: Element | null = liveAnchors.get(d) ?? null;
   try {
     if (!el?.isConnected) el = queryPath(d.element.path);
@@ -135,8 +127,22 @@ export function resolveDrawing(d: Drawing): {
     const candidates = queryAll(d.element.tag).filter(valid);
     el = candidates.length === 1 ? candidates[0]! : null;
   }
-  if (!el) return { points: [], uncertain: true };
+  if (!el) return null;
   liveAnchors.set(d, el);
+  return el;
+}
+export function resolveDrawing(d: Drawing): {
+  points: Point[];
+  uncertain: boolean;
+  clip?: ReturnType<typeof visibleClip>;
+} {
+  if (!d.element)
+    return {
+      points: d.points.map(([x, y, p]) => [x - scrollX, y - scrollY, p]),
+      uncertain: Math.abs(innerWidth / d.viewport[0] - 1) > 0.15,
+    };
+  const el = drawingElement(d);
+  if (!el) return { points: [], uncertain: true };
   const metrics = elementMetrics(el);
   const r = metrics.rect;
   if (!r.width || !r.height) return { points: [], uncertain: true };

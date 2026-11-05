@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { finishDrawing, resolveDrawing } from "../lib/drawing";
+import { drawingElement, finishDrawing, resolveDrawing } from "../lib/drawing";
 import { drawingSchema } from "../lib/model";
 function rect(el: Element, left = 10, top = 20, width = 400, height = 300) {
   vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
@@ -118,4 +118,39 @@ it("stores unscaled element content coordinates and follows transform scale chan
   expect(d.coordinateSpace).toBe("element-content-v2");
   rect(el, 10, 20, 400, 300);
   expect(resolveDrawing(d).points[0]).toEqual([50, 80, 0.5]);
+});
+
+it("scopes shapes attached to a child of a recycled post", () => {
+  document.body.innerHTML =
+    '<article><a href="https://x.com/a/status/1"><time>today</time></a><p>Repeated words</p></article>';
+  const el = document.querySelector("p")!;
+  rect(el);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  expect(d.element?.identity).toBe("https://x.com/a/status/1");
+  document.querySelector("a")!.href = "https://x.com/a/status/2";
+  expect(resolveDrawing(d).points).toHaveLength(0);
+  expect(drawingElement(d)).toBeNull();
+});
+it("editing resolves the original live element after sibling insertion", () => {
+  document.body.innerHTML = "<p>original</p>";
+  const el = document.querySelector("p")!;
+  rect(el);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  resolveDrawing(d);
+  el.insertAdjacentHTML("beforebegin", "<p>wrong target</p>");
+  expect(drawingElement(d)).toBe(el);
 });

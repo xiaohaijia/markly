@@ -36,7 +36,19 @@ async function notify(pageId?: string) {
     .sendMessage({ marklyEvent: "changed", pageId })
     .catch(() => {});
 }
+const injections = new Map<number, Promise<void>>();
 async function inject(tabId: number) {
+  const running = injections.get(tabId);
+  if (running) return running;
+  const task = injectOnce(tabId);
+  injections.set(tabId, task);
+  try {
+    await task;
+  } finally {
+    if (injections.get(tabId) === task) injections.delete(tabId);
+  }
+}
+async function injectOnce(tabId: number) {
   const existing = await browser.tabs
     .sendMessage(tabId, { marklyEvent: "probe" })
     .catch(() => null);
@@ -131,7 +143,7 @@ export default defineBackground(() => {
               req.opId,
               req.expectedUpdatedAt,
             );
-            await notify(req.page.id);
+            void notify(req.page.id).catch(() => {});
             break;
           case "delete":
             await db.remove(
@@ -140,11 +152,11 @@ export default defineBackground(() => {
               req.opId,
               req.expectedUpdatedAt,
             );
-            await notify(req.pageId);
+            void notify(req.pageId).catch(() => {});
             break;
           case "clear-page":
             await db.clearPage(req.pageId, req.opId);
-            await notify(req.pageId);
+            void notify(req.pageId).catch(() => {});
             break;
           case "all":
             data = await db.export();
@@ -154,7 +166,7 @@ export default defineBackground(() => {
             break;
           case "import":
             data = await db.import(req.backup);
-            await notify();
+            void notify().catch(() => {});
             break;
           case "history":
             await browser.tabs.create({

@@ -97,10 +97,14 @@ it("accepts old and new backup versions and preserves versioned coordinates", as
             ...annotation.drawing,
             tool: "text",
             points: [[10, 20, 0.5]],
+            textWidth: 150,
           },
         },
       ],
     }).annotations[0],
-  ).toMatchObject({ kind: "page", position: { points: [[10, 20, 0.5]] } });
-  expect(backupSchema.safeParse({ ...backup, version: 4 }).success).toBe(false);
+  ).toMatchObject({
+    kind: "page",
+    position: { points: [[10, 20, 0.5]], textWidth: 150 },
+  });
+  expect(backupSchema.safeParse({ ...backup, version: 5 }).success).toBe(false);
 });

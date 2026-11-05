@@ -47,6 +47,7 @@ export const drawingSchema = z.object({
   coordinateSpace: z.literal("element-content-v2").optional(),
   points: z.array(point).min(1).max(20000),
   text: z.string().max(10000).optional(),
+  textWidth: z.number().positive().max(10000).optional(),
   element: elementAnchorSchema.optional(),
   origin: z.tuple([z.number().finite(), z.number().finite()]),
   viewport: z.tuple([z.number().positive(), z.number().positive()]),
@@ -90,7 +91,7 @@ export type Annotation = z.infer<typeof annotationSchema>;
 export type TextAnnotation = Extract<Annotation, { kind: "text" }>;
 export const backupSchema = z.object({
   format: z.literal("markly"),
-  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   exportedAt: z.number(),
   pages: z.array(pageSchema).max(50000),
   annotations: z.array(annotationSchema).max(100000),

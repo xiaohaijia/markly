@@ -1,8 +1,8 @@
 import { useGeometry } from "../lib/runtime/geometry-clock";
-import { queryPath } from "../lib/runtime/dom";
 import { useEffect, useRef, useState } from "react";
 import {
   bounds,
+  drawingElement,
   elementFor,
   finishDrawing,
   freehand,
@@ -15,6 +15,7 @@ import {
   type Drawing,
   type Point,
 } from "../lib/model";
+import { textLines } from "../lib/text-layout";
 import s from "./Markly.module.css";
 export type Tool = "pointer" | "note" | Drawing["tool"];
 export function Shape({
@@ -55,8 +56,9 @@ export function Shape({
         fill={color}
         fontSize="19"
         fontFamily="sans-serif"
+        style={{ whiteSpace: "pre" }}
       >
-        {drawing.text?.split("\n").map((line, i) => (
+        {textLines(drawing.text ?? "", drawing.textWidth).map((line, i) => (
           <tspan key={i} x={first[0]} dy={i ? 25 : 0}>
             {line || " "}
           </tspan>
@@ -104,6 +106,8 @@ export function DrawingLayer({
   useGeometry();
   const [draft, setDraft] = useState<Point[]>([]);
   const gesture = useRef<{
+    geometry: string;
+    pointerId: number;
     kind: "note" | "draw" | "move" | "resize";
     points: Point[];
     element: Element | null;
@@ -122,40 +126,85 @@ export function DrawingLayer({
   };
   useEffect(() => {
     window.addEventListener("blur", cancel);
-    return () => window.removeEventListener("blur", cancel);
+    window.addEventListener("scroll", cancel, true);
+    window.addEventListener("resize", cancel);
+    return () => {
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("scroll", cancel, true);
+      window.removeEventListener("resize", cancel);
+    };
   }, []);
   const point = (e: React.PointerEvent): Point => [
     e.clientX,
     e.clientY,
     e.pressure || 0.5,
   ];
+  function geometry(element: Element | null) {
+    const r = element?.getBoundingClientRect();
+    return JSON.stringify([
+      scrollX,
+      scrollY,
+      innerWidth,
+      innerHeight,
+      r?.left,
+      r?.top,
+      r?.width,
+      r?.height,
+      element?.scrollLeft,
+      element?.scrollTop,
+    ]);
+  }
   function down(e: React.PointerEvent<SVGSVGElement>) {
-    if (tool === "pointer" || e.button !== 0) return;
+    if (tool === "pointer" || e.button !== 0 || !e.isPrimary || gesture.current)
+      return;
     const p = point(e);
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     const el = elementFor(p[0], p[1]);
     if (tool === "note") {
-      gesture.current = { kind: "note", start: p, element: el, points: [p] };
+      gesture.current = {
+        geometry: geometry(el),
+        pointerId: e.pointerId,
+        kind: "note",
+        start: p,
+        element: el,
+        points: [p],
+      };
       return;
     }
     if (tool === "text") {
       onText(p, el);
       return;
     }
-    gesture.current = { kind: "draw", points: [p], element: el, start: p };
+    gesture.current = {
+      geometry: geometry(el),
+      pointerId: e.pointerId,
+      kind: "draw",
+      points: [p],
+      element: el,
+      start: p,
+    };
     setDraft([p]);
   }
   function move(e: React.PointerEvent<SVGSVGElement>) {
     const g = gesture.current;
-    if (!g) return;
+    if (!g || e.pointerId !== g.pointerId) return;
+    if (geometry(g.element) !== g.geometry) {
+      cancel();
+      return;
+    }
     const p = point(e);
     if (g.kind === "note") {
       if (Math.hypot(p[0] - g.start[0], p[1] - g.start[1]) > 5) cancel();
       return;
     }
     if (g.kind === "draw") {
-      g.points = tool === "pen" ? [...g.points.slice(-19998), p] : [g.start, p];
+      g.points =
+        tool === "pen"
+          ? g.points.length < 19999
+            ? [...g.points, p]
+            : g.points
+          : [g.start, p];
       setDraft(g.points);
     } else if (g.annotation && g.rendered) {
       const dx = p[0] - g.start[0],
@@ -177,8 +226,12 @@ export function DrawingLayer({
       setPreview({ id: g.annotation.id, points: next });
     }
   }
-  function up() {
+  function up(e: React.PointerEvent<SVGSVGElement>) {
     const g = gesture.current;
+    if (!g || g.pointerId !== e.pointerId) return;
+    // pointerup may carry a new final position with no preceding pointermove.
+    move(e);
+    if (!gesture.current) return;
     gesture.current = null;
     setDraft([]);
     setPreview(null);
@@ -201,12 +254,15 @@ export function DrawingLayer({
       if (delta) {
         onUpdate({
           ...g.annotation,
-          drawing: finishDrawing(
-            g.annotation.drawing.tool,
-            g.points,
-            g.element,
-            g.annotation.drawing.text,
-          ),
+          drawing: {
+            ...finishDrawing(
+              g.annotation.drawing.tool,
+              g.points,
+              g.element,
+              g.annotation.drawing.text,
+            ),
+            textWidth: g.annotation.drawing.textWidth,
+          },
         });
       }
     }
@@ -217,16 +273,17 @@ export function DrawingLayer({
     points: Point[],
     kind: "move" | "resize",
   ) {
-    if (tool !== "pointer") return;
+    if (tool !== "pointer" || e.button !== 0 || !e.isPrimary || gesture.current)
+      return;
     e.stopPropagation();
     e.preventDefault();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     onSelect(a.id);
-    let el: Element | null = null;
-    try {
-      if (a.drawing.element) el = queryPath(a.drawing.element.path);
-    } catch {}
+    const el = drawingElement(a.drawing);
+    if (a.drawing.element && !el) return;
     gesture.current = {
+      geometry: geometry(el),
+      pointerId: e.pointerId,
       kind,
       points,
       rendered: points,
@@ -247,8 +304,12 @@ export function DrawingLayer({
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
-      onPointerCancel={cancel}
-      onLostPointerCapture={cancel}
+      onPointerCancel={(e) => {
+        if (gesture.current?.pointerId === e.pointerId) cancel();
+      }}
+      onLostPointerCapture={(e) => {
+        if (gesture.current?.pointerId === e.pointerId) cancel();
+      }}
     >
       {annotations
         .filter(

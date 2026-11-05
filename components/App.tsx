@@ -22,6 +22,7 @@ import {
   type TextAnchor,
   type TextAnnotation,
 } from "../lib/model";
+import { InlineText } from "./InlineText";
 import { EditorSurface } from "./EditorSurface";
 import { NoteMarkers } from "./NoteMarkers";
 import { invalidateGeometry } from "../lib/runtime/geometry-clock";
@@ -374,6 +375,11 @@ export function App() {
           e.stopPropagation();
           return;
         }
+        if (
+          editor?.annotation.kind === "drawing" &&
+          editor.annotation.drawing.tool === "text"
+        )
+          return;
         if (editor) {
           e.preventDefault();
           e.stopPropagation();
@@ -530,7 +536,10 @@ export function App() {
       annotation: {
         ...newBase(page.id, ink),
         kind: "drawing",
-        drawing: finishDrawing("text", [point], el, ""),
+        drawing: {
+          ...finishDrawing("text", [point], el, ""),
+          textWidth: Math.max(40, Math.min(280, innerWidth - point[0] - 12)),
+        },
       },
       isNew: true,
     });
@@ -599,7 +608,14 @@ export function App() {
         <DrawingLayer
           key={page.id + tool}
           annotations={[
-            ...annotations,
+            ...annotations.filter(
+              (a) =>
+                !(
+                  editor?.annotation.kind === "drawing" &&
+                  editor.annotation.drawing.tool === "text" &&
+                  editor.annotation.id === a.id
+                ),
+            ),
             ...draftDrawings.filter(
               (d) => !annotations.some((a) => a.id === d.id),
             ),
@@ -985,77 +1001,95 @@ export function App() {
             )}
           </div>
         )}
-        {editor && (
-          <EditorSurface
-            annotation={editor.annotation}
-            draft={editor.isNew}
-            panel={panel}
-          >
-            <div className={s.editorHead}>
-              <span className={s.noteLabel}>
-                <Icon name="note" size={14} />
-                {editor.annotation.kind === "drawing" &&
-                editor.annotation.drawing.tool === "text"
-                  ? "添加文字"
-                  : editor.isNew
-                    ? "写备注"
-                    : "编辑备注"}
-              </span>
-              <button
-                disabled={pending}
-                ref={editorClose}
-                aria-label="关闭编辑"
-                data-tip="关闭编辑"
-                onClick={() => {
-                  const original = annotations.find(
-                    (a) => a.id === editor.annotation.id,
+        {editor?.annotation.kind === "drawing" &&
+          editor.annotation.drawing.tool === "text" && (
+            <InlineText
+              key={editor.annotation.id}
+              annotation={editor.annotation}
+              isNew={editor.isNew}
+              pending={pending}
+              error={error}
+              onChange={(text, textWidth) =>
+                setEditor((v) =>
+                  v?.annotation.kind === "drawing"
+                    ? {
+                        ...v,
+                        annotation: {
+                          ...v.annotation,
+                          drawing: { ...v.annotation.drawing, text, textWidth },
+                        },
+                      }
+                    : v,
+                )
+              }
+              onSave={async () => {
+                const current = editor;
+                const ok = await save(current.annotation, current.isNew);
+                if (ok)
+                  setEditor((v) =>
+                    v?.annotation.id === current.annotation.id ? null : v,
                   );
-                  const dirty = original
-                    ? JSON.stringify(original) !==
-                      JSON.stringify(editor.annotation)
-                    : !!(
-                        editor.annotation.note.trim() ||
-                        (editor.annotation.kind === "drawing" &&
-                          editor.annotation.drawing.text?.trim())
-                      );
-                  if (!dirty && !error) setEditor(null);
-                  else setDiscard(true);
-                }}
-              >
-                <Icon name="close" size={15} />
-              </button>
-            </div>
-            {editor.annotation.kind === "text" && (
-              <p className={s.editorQuote}>{editor.annotation.anchor.exact}</p>
-            )}
-            {editor.annotation.kind === "drawing" &&
-              editor.annotation.drawing.tool === "text" && (
-                <textarea
-                  autoFocus
-                  readOnly={pending}
-                  aria-label="图中文字"
-                  placeholder="在网页上写一句话…"
-                  value={editor.annotation.drawing.text ?? ""}
-                  onChange={(e) => {
-                    const text = e.target.value;
-                    setEditor((v) =>
-                      v && v.annotation.kind === "drawing"
-                        ? {
-                            ...v,
-                            annotation: {
-                              ...v.annotation,
-                              drawing: { ...v.annotation.drawing, text },
-                            },
-                          }
-                        : v,
+                return ok;
+              }}
+              onCancel={() => {
+                setEditor(null);
+                setError("");
+              }}
+              onCopy={async () => {
+                const current = editor;
+                const copy = {
+                  ...current.annotation,
+                  id: crypto.randomUUID(),
+                  createdAt: Date.now(),
+                };
+                if (await save(copy, true))
+                  setEditor((v) =>
+                    v?.annotation.id === current.annotation.id ? null : v,
+                  );
+              }}
+              onRetry={retry ?? undefined}
+            />
+          )}
+        {editor &&
+          !(
+            editor.annotation.kind === "drawing" &&
+            editor.annotation.drawing.tool === "text"
+          ) && (
+            <EditorSurface
+              annotation={editor.annotation}
+              draft={editor.isNew}
+              panel={panel}
+            >
+              <div className={s.editorHead}>
+                <span className={s.noteLabel}>
+                  <Icon name="note" size={14} />
+                  {editor.isNew ? "写备注" : "编辑备注"}
+                </span>
+                <button
+                  ref={editorClose}
+                  disabled={pending}
+                  aria-label="关闭编辑"
+                  data-tip="关闭编辑"
+                  onClick={() => {
+                    const original = annotations.find(
+                      (a) => a.id === editor.annotation.id,
                     );
+                    const dirty = original
+                      ? JSON.stringify(original) !==
+                        JSON.stringify(editor.annotation)
+                      : !!editor.annotation.note.trim();
+                    if (!dirty && !error) setEditor(null);
+                    else setDiscard(true);
                   }}
-                />
+                >
+                  <Icon name="close" size={15} />
+                </button>
+              </div>
+              {editor.annotation.kind === "text" && (
+                <p className={s.editorQuote}>
+                  {editor.annotation.anchor.exact}
+                </p>
               )}
-            {!(
-              editor.annotation.kind === "drawing" &&
-              editor.annotation.drawing.tool === "text"
-            ) && (
               <textarea
                 autoFocus
                 readOnly={pending}
@@ -1074,70 +1108,69 @@ export function App() {
                   )
                 }
               />
-            )}
-            {discard && (
-              <div className={s.discard} role="alert">
-                <p>放弃尚未保存的编辑？</p>
-                <button onClick={() => setDiscard(false)}>继续编辑</button>
+              {discard && (
+                <div className={s.discard} role="alert">
+                  <p>放弃尚未保存的编辑？</p>
+                  <button onClick={() => setDiscard(false)}>继续编辑</button>
+                  <button
+                    onClick={() => {
+                      setEditor(null);
+                      setDiscard(false);
+                    }}
+                  >
+                    放弃编辑
+                  </button>
+                </div>
+              )}
+              {error && <p className={s.error}>{error}</p>}
+              <div className={s.editorActions}>
+                {retry && (
+                  <button disabled={pending} onClick={() => void retry()}>
+                    重试保存
+                  </button>
+                )}
+                {error.includes("其他标签页") && (
+                  <button
+                    onClick={async () => {
+                      const copy = {
+                        ...editor.annotation,
+                        id: crypto.randomUUID(),
+                        createdAt: Date.now(),
+                      };
+                      if (await save(copy, true)) setEditor(null);
+                    }}
+                  >
+                    另存一条
+                  </button>
+                )}
                 <button
-                  onClick={() => {
-                    setEditor(null);
-                    setDiscard(false);
+                  className={s.primary}
+                  disabled={
+                    pending ||
+                    !!retry ||
+                    (!editor.annotation.note.trim() &&
+                      editor.annotation.kind === "page") ||
+                    (editor.annotation.kind === "drawing" &&
+                      editor.annotation.drawing.tool === "text" &&
+                      !editor.annotation.drawing.text?.trim())
+                  }
+                  onClick={async () => {
+                    const current = editor;
+                    if (await save(current.annotation, current.isNew))
+                      setEditor(null);
                   }}
                 >
-                  放弃编辑
+                  <Icon name="check" size={15} />
+                  {pending
+                    ? "保存中…"
+                    : editor.annotation.kind === "drawing" &&
+                        editor.annotation.drawing.tool === "text"
+                      ? "保存文字"
+                      : "保存备注"}
                 </button>
               </div>
-            )}
-            {error && <p className={s.error}>{error}</p>}
-            <div className={s.editorActions}>
-              {retry && (
-                <button disabled={pending} onClick={() => void retry()}>
-                  重试保存
-                </button>
-              )}
-              {error.includes("其他标签页") && (
-                <button
-                  onClick={async () => {
-                    const copy = {
-                      ...editor.annotation,
-                      id: crypto.randomUUID(),
-                      createdAt: Date.now(),
-                    };
-                    if (await save(copy, true)) setEditor(null);
-                  }}
-                >
-                  另存一条
-                </button>
-              )}
-              <button
-                className={s.primary}
-                disabled={
-                  pending ||
-                  !!retry ||
-                  (!editor.annotation.note.trim() &&
-                    editor.annotation.kind === "page") ||
-                  (editor.annotation.kind === "drawing" &&
-                    editor.annotation.drawing.tool === "text" &&
-                    !editor.annotation.drawing.text?.trim())
-                }
-                onClick={async () => {
-                  const current = editor;
-                  if (await save(current.annotation, current.isNew))
-                    setEditor(null);
-                }}
-              >
-                <Icon name="check" size={15} />
-                {pending
-                  ? "保存中…"
-                  : editor.annotation.kind === "drawing" &&
-                      editor.annotation.drawing.tool === "text"
-                    ? "保存文字"
-                    : "保存备注"}
-              </button>
-            </div>
-          </EditorSurface>
-        )}
+            </EditorSurface>
+          )}
         {(tool !== "pointer" || relink || selected) && (
           <div className={s.modeHint}>
             {relink

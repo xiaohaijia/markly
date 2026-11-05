@@ -389,7 +389,7 @@ test("pen arrow text and shape editing plus conflicting note edits", async () =>
   await page.getByRole("button", { name: "文字", exact: true }).click();
   await page.mouse.click(x + 200, y);
   await page.getByRole("textbox", { name: "图中文字" }).fill("核心能力！");
-  await page.getByRole("button", { name: "保存文字" }).click();
+  await page.getByRole("textbox", { name: "图中文字" }).press("Control+Enter");
   await expect(page.getByTestId("annotation-card")).toHaveCount(4);
   const rect = page
     .getByTestId("annotation-card")
@@ -513,7 +513,7 @@ test("transformed host, nested scroll, compact notes and text editor regression"
   await expect(editor).toBeFocused();
   await expect(page.getByRole("textbox", { name: "备注内容" })).toHaveCount(0);
   await editor.fill("第一行文字\n第二行文字");
-  await page.getByRole("button", { name: "保存文字", exact: true }).click();
+  await editor.press("Control+Enter");
   await expect(
     page.getByTestId("drawing-layer").locator("text tspan"),
   ).toHaveCount(2);
@@ -919,5 +919,156 @@ test("browser action switches off the entire extension surface", async () => {
   await toggle();
   await expect(tools).toBeVisible();
   await expect(panel).toHaveCount(0);
+  await page.close();
+});
+
+test("drawing ignores foreign pointers, uses final release point and cancels on scroll", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(article + "?gesture-audit");
+  const layer = page.getByTestId("drawing-layer");
+  await page.getByRole("button", { name: "矩形", exact: true }).click();
+  const b = (await page.locator("#quote").boundingBox())!;
+  const x = b.x + 12,
+    y = b.y + 12;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 30, y + 20);
+  await layer.evaluate((el) =>
+    el.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 99,
+        isPrimary: false,
+        clientX: 0,
+        clientY: 0,
+      }),
+    ),
+  );
+  // The original gesture must still be active; its release coordinates win.
+  await layer.evaluate(
+    (el, p) =>
+      el.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          pointerId: 1,
+          isPrimary: true,
+          clientX: p.x,
+          clientY: p.y,
+        }),
+      ),
+    { x: x + 100, y: y + 40 },
+  );
+  await page.mouse.up();
+  await page.keyboard.press("Escape");
+  const shape = layer.locator(":scope > g > rect[rx]");
+  await expect(shape).toHaveCount(1);
+  expect((await shape.boundingBox())!.width).toBeGreaterThan(98);
+  await page.getByRole("button", { name: "矩形", exact: true }).click();
+  await page.mouse.move(x + 160, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 220, y + 40);
+  await page.evaluate(() => scrollBy(0, 60));
+  await page.waitForFunction(() => scrollY >= 60);
+  await page.mouse.up();
+  await page.keyboard.press("Escape");
+  await expect(shape).toHaveCount(1);
+  await page
+    .getByRole("button", { name: "显示 / 收起批注面板", exact: true })
+    .click();
+  await expect(page.getByTestId("annotation-card")).toHaveCount(1);
+  await page.reload();
+  await expect(shape).toHaveCount(1);
+  await page.close();
+});
+
+test("inline text saves on outside click, supports IME and reopens without a dialog", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(article + "?inline-text");
+  await page.getByRole("button", { name: "文字", exact: true }).click();
+  await page.mouse.click(350, 300);
+  const field = page.getByRole("textbox", { name: "图中文字" });
+  await expect(field).toBeFocused();
+  await expect(page.getByRole("region", { name: "编辑备注" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "保存文字", exact: true }),
+  ).toHaveCount(0);
+  const box = (await field.boundingBox())!;
+  expect(Math.abs(box.x - 350)).toBeLessThan(2);
+  await field.dispatchEvent("compositionstart");
+  await field.fill("原位输入🧠");
+  await field.press("Enter");
+  await expect(field).toBeVisible();
+  await field.dispatchEvent("compositionend");
+  await field.fill("原位输入🧠\n第二行");
+  await page.screenshot({ path: "artifacts/inline-text-edit.png" });
+  await page.mouse.click(200, 180);
+  await expect(field).toHaveCount(0);
+  const text = page.getByTestId("drawing-layer").locator("text");
+  await expect(text).toHaveCount(1);
+  await expect(text.locator("tspan")).toHaveCount(2);
+  await text.dblclick();
+  await expect(field).toHaveValue("原位输入🧠\n第二行");
+  await field.fill("修改后的文字");
+  await field.press("Control+Enter");
+  await expect(field).toHaveCount(0);
+  await page.reload();
+  await expect(text).toContainText("修改后的文字");
+  await page.getByRole("button", { name: "文字", exact: true }).click();
+  await page.mouse.click(460, 350);
+  await expect(field).toBeVisible();
+  await field.press("Escape");
+  await expect(field).toHaveCount(0);
+  await expect(text).toHaveCount(1);
+  // An edge placement wraps into multiple saved lines, rather than a popup.
+  await page.getByRole("button", { name: "文字", exact: true }).click();
+  await page.mouse.click(1250, 350);
+  await field.fill(
+    "这是一段很长很长的文字用于测试在页面边缘的换行以及保存之后仍然保持同样的显示布局",
+  );
+  await page.mouse.click(200, 180);
+  await expect(field).toHaveCount(0);
+  await expect(text).toHaveCount(2);
+  expect(await text.last().locator("tspan").count()).toBeGreaterThan(1);
+  await page.reload();
+  await expect(text).toHaveCount(2);
+  await page.close();
+});
+
+test("inline text keeps failed autosave content and retries", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(article + "?inline-failure");
+  await page.getByRole("button", { name: "文字", exact: true }).click();
+  await page.mouse.click(400, 300);
+  const field = page.getByRole("textbox", { name: "图中文字" });
+  await field.fill("不能丢失的文字");
+  await worker.evaluate(() => {
+    const original = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (
+      ...args: Parameters<typeof original>
+    ) {
+      if (this.name === "annotations") {
+        IDBObjectStore.prototype.put = original;
+        throw new DOMException("inline write failure", "QuotaExceededError");
+      }
+      return original.apply(this, args);
+    };
+  });
+  await page.mouse.click(200, 180);
+  await expect(
+    page.getByRole("button", { name: "重试保存", exact: true }),
+  ).toBeVisible();
+  await expect(field).toHaveValue("不能丢失的文字");
+  await page.getByRole("button", { name: "重试保存", exact: true }).click();
+  await expect(field).toHaveCount(0);
+  await expect(page.getByTestId("drawing-layer").locator("text")).toHaveCount(
+    1,
+  );
+  await page.reload();
+  await expect(page.getByTestId("drawing-layer").locator("text")).toContainText(
+    "不能丢失的文字",
+  );
   await page.close();
 });

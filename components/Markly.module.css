@@ -974,3 +974,44 @@
   font-size: 13px;
   font-weight: 600;
 }
+.inlineSurface {
+  position: fixed;
+  pointer-events: auto;
+  z-index: 6;
+}
+.root .inlineSurface textarea {
+  display: block;
+  box-sizing: content-box;
+  width: 100%;
+  min-height: 25px;
+  max-height: calc(100vh - 40px);
+  font: 19px/25px sans-serif;
+  letter-spacing: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  resize: none;
+  outline: 1px dashed #70897070;
+  outline-offset: 3px;
+  box-shadow: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  overflow: auto;
+  caret-color: #202420;
+}
+.inlineStatus {
+  font-size: 11px;
+  color: #66795d;
+  background: #faf9f6;
+}
+.inlineError {
+  font-size: 12px;
+  color: #a13d37;
+  background: #faf9f6;
+  border: 1px solid #e3c6c2;
+  border-radius: 5px;
+  padding: 6px;
+}

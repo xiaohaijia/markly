@@ -88,7 +88,7 @@ export class MarklyDB extends Dexie {
   async export(): Promise<Backup> {
     return this.transaction("r", this.pages, this.annotations, async () => ({
       format: "markly",
-      version: 3,
+      version: 4,
       exportedAt: Date.now(),
       pages: await this.pages.toArray(),
       annotations: await this.annotations.toArray(),
