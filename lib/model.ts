@@ -43,7 +43,16 @@ export const elementAnchorSchema = z.object({
 });
 export type ElementAnchor = z.infer<typeof elementAnchorSchema>;
 export const drawingSchema = z.object({
-  tool: z.enum(["pen", "rect", "ellipse", "arrow", "text"]),
+  tool: z.enum([
+    "pen",
+    "rect",
+    "ellipse",
+    "arrow",
+    "text",
+    "line",
+    "wave",
+    "double",
+  ]),
   coordinateSpace: z.literal("element-content-v2").optional(),
   points: z.array(point).min(1).max(20000),
   text: z.string().max(10000).optional(),
@@ -91,7 +100,13 @@ export type Annotation = z.infer<typeof annotationSchema>;
 export type TextAnnotation = Extract<Annotation, { kind: "text" }>;
 export const backupSchema = z.object({
   format: z.literal("markly"),
-  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  version: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]),
   exportedAt: z.number(),
   pages: z.array(pageSchema).max(50000),
   annotations: z.array(annotationSchema).max(100000),

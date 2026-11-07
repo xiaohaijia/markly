@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { drawingElement, finishDrawing, resolveDrawing } from "../lib/drawing";
+import { invalidateContent } from "../lib/runtime/content-clock";
 import { drawingSchema } from "../lib/model";
 function rect(el: Element, left = 10, top = 20, width = 400, height = 300) {
   vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
@@ -16,6 +17,7 @@ function rect(el: Element, left = 10, top = 20, width = 400, height = 300) {
 }
 beforeEach(() => {
   document.body.innerHTML = "";
+  invalidateContent();
 });
 it("tracks the anchor's internal scroll after serialization and refresh", () => {
   document.body.innerHTML = '<div id="scroll">Stable content</div>';
@@ -69,6 +71,7 @@ it("uses the post permalink when counters change, but rejects a recycled post", 
   el.querySelector("span")!.textContent = "2 likes";
   expect(resolveDrawing(d).points).toHaveLength(2);
   el.querySelector("a")!.href = "https://x.com/test/status/456";
+  invalidateContent();
   expect(resolveDrawing(d).uncertain).toBe(true);
   expect(resolveDrawing(d).points).toHaveLength(0);
 });
@@ -85,8 +88,10 @@ it("reattaches a temporarily removed element only to a unique match", () => {
     el,
   );
   el.remove();
+  invalidateContent();
   expect(resolveDrawing(d).uncertain).toBe(true);
   document.body.append(el);
+  invalidateContent();
   rect(el, 10, 70);
   expect(resolveDrawing(d).points[0]).toEqual([30, 100, 0.5]);
 });
@@ -135,6 +140,7 @@ it("scopes shapes attached to a child of a recycled post", () => {
   );
   expect(d.element?.identity).toBe("https://x.com/a/status/1");
   document.querySelector("a")!.href = "https://x.com/a/status/2";
+  invalidateContent();
   expect(resolveDrawing(d).points).toHaveLength(0);
   expect(drawingElement(d)).toBeNull();
 });
@@ -153,4 +159,25 @@ it("editing resolves the original live element after sibling insertion", () => {
   resolveDrawing(d);
   el.insertAdjacentHTML("beforebegin", "<p>wrong target</p>");
   expect(drawingElement(d)).toBe(el);
+});
+
+it("does not repeat identity text reads during geometry-only updates", () => {
+  document.body.innerHTML = "<p>stable</p>";
+  const el = document.querySelector("p")!;
+  rect(el);
+  const d = finishDrawing(
+    "rect",
+    [
+      [30, 50, 0.5],
+      [60, 80, 0.5],
+    ],
+    el,
+  );
+  const getter = vi.spyOn(el, "textContent", "get");
+  for (let i = 0; i < 20; i++) resolveDrawing(d);
+  expect(getter).toHaveBeenCalledTimes(1);
+  invalidateContent();
+  resolveDrawing(d);
+  expect(getter).toHaveBeenCalledTimes(2);
+  getter.mockRestore();
 });

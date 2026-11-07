@@ -106,5 +106,5 @@ it("accepts old and new backup versions and preserves versioned coordinates", as
     kind: "page",
     position: { points: [[10, 20, 0.5]], textWidth: 150 },
   });
-  expect(backupSchema.safeParse({ ...backup, version: 5 }).success).toBe(false);
+  expect(backupSchema.safeParse({ ...backup, version: 6 }).success).toBe(false);
 });

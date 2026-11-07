@@ -26,10 +26,19 @@ function Preview({ pos, note }: { pos: NotePosition; note: string }) {
           : pos.y + 36 + height <= viewportHeight - 8
             ? pos.y + 36
             : pos.y - 8 - height;
-      el.style.left =
-        Math.max(8, Math.min(side ?? pos.x, viewportWidth - width - 8)) + "px";
-      el.style.top =
-        Math.max(8, Math.min(top, viewportHeight - height - 8)) + "px";
+      const cardLeft = Math.max(
+        8,
+        Math.min(side ?? pos.x, viewportWidth - width - 8),
+      );
+      const cardTop = Math.max(8, Math.min(top, viewportHeight - height - 8));
+      el.style.left = cardLeft + "px";
+      el.style.top = cardTop + "px";
+      el.dataset.side =
+        side === right ? "right" : side === left ? "left" : "vertical";
+      el.style.setProperty(
+        "--note-connector-y",
+        Math.max(15, Math.min(height - 15, pos.y + 14 - cardTop)) + "px",
+      );
     };
     place();
     const ro = new ResizeObserver(place);
@@ -42,9 +51,14 @@ function Preview({ pos, note }: { pos: NotePosition; note: string }) {
       className={s.notePreview}
       role="tooltip"
       id={"markly-preview-" + pos.id}
-      style={{ maxWidth: "min(248px, calc(100vw - 16px))" }}
     >
-      <p>{note}</p>
+      <div className={s.previewLabel}>
+        <Icon name="note" size={13} />
+        <span>备注</span>
+      </div>
+      <div className={s.previewBody}>
+        <p>{note}</p>
+      </div>
     </div>
   );
 }
@@ -100,13 +114,9 @@ function locateNotes(
       continue;
     }
     if (bottom < 20 || top > innerHeight - 40) continue;
-    let y = Math.max(12, Math.min(innerHeight - 40, top));
-    const x = Math.max(8, Math.min(innerWidth - 38, left - 30));
-    while (
-      positions.some((p) => Math.abs(p.x - x) < 28 && Math.abs(p.y - y) < 30)
-    )
-      y += 30;
-    if (y > innerHeight - 30) continue;
+    const y = top;
+    const x = left - 30;
+    if (y + 28 < 0 || y > innerHeight || x + 26 < 0 || x > innerWidth) continue;
     positions.push({ id: a.id, x, y, compact: true });
   }
   return positions;

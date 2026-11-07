@@ -22,6 +22,8 @@ import {
   type TextAnchor,
   type TextAnnotation,
 } from "../lib/model";
+import { LineTool } from "./LineTool";
+import { isLine, LINE_LABELS, type LineKind } from "../lib/lines";
 import { InlineText } from "./InlineText";
 import { EditorSurface } from "./EditorSurface";
 import { NoteMarkers } from "./NoteMarkers";
@@ -73,6 +75,7 @@ export function App() {
   const annotationsRef = useRef(annotations);
   annotationsRef.current = annotations;
   const [active, setActive] = useState(true);
+  const [lastLine, setLastLine] = useState<LineKind>("line");
   const [toolsOpen, setToolsOpen] = useState(true);
   const editorClose = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState(false),
@@ -140,8 +143,10 @@ export function App() {
     };
     browser.runtime.onMessage.addListener(handler);
     browser.storage.local
-      .get(["color", "ink"])
+      .get(["color", "ink", "lineKind"])
       .then((v) => {
+        if (typeof v.lineKind === "string" && isLine(v.lineKind))
+          setLastLine(v.lineKind);
         if (typeof v.color === "string" && v.color in COLORS)
           setColor(v.color as Color);
         if (typeof v.ink === "string" && v.ink in COLORS)
@@ -669,6 +674,19 @@ export function App() {
                 <Icon name={t.id} />
               </button>
             ))}
+            <LineTool
+              tool={tool}
+              last={lastLine}
+              onChoose={(kind) => {
+                setLastLine(kind);
+                setTool(kind);
+                setHidden(false);
+                setSelection(null);
+                void browser.storage.local
+                  .set({ lineKind: kind })
+                  .catch(() => {});
+              }}
+            />
             <button
               data-tip="页面备注"
               aria-label="页面备注"
@@ -848,6 +866,9 @@ export function App() {
                                   rect: "矩形标注",
                                   ellipse: "圈选标注",
                                   arrow: "箭头标注",
+                                  line: "横线",
+                                  wave: "波浪线",
+                                  double: "双横线",
                                 }[a.drawing.tool]}
                       </p>
                       {a.note && a.kind !== "page" && (
@@ -912,17 +933,6 @@ export function App() {
               )}
             </div>
             <footer className={s.footer}>
-              <button
-                disabled={!!editor}
-                onClick={() => {
-                  setTool(tool === "note" ? "pointer" : "note");
-                  setHidden(false);
-                  setSelection(null);
-                }}
-              >
-                <Icon name="plus" size={16} />
-                添加页面备注
-              </button>
               <div
                 className={`${s.status} ${error ? s.error : ""}`}
                 aria-live="polite"
@@ -1177,7 +1187,7 @@ export function App() {
               ? "选中新的原文，再点击“关联到此处”"
               : selected
                 ? "拖动选中的图形，Delete 删除"
-                : `${tool === "note" ? "点击网页放置备注" : tools.find((t) => t.id === tool)?.label} · Esc 返回浏览`}
+                : `${tool === "note" ? "点击网页放置备注" : isLine(tool) ? LINE_LABELS[tool] : tools.find((t) => t.id === tool)?.label}`}
             {selected && (
               <button
                 onClick={() => {

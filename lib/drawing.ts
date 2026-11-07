@@ -1,3 +1,4 @@
+import { contentRevision } from "./runtime/content-clock";
 import { hitElements, queryPath, queryAll, parentElement } from "./runtime/dom";
 import { visibleClip, elementMetrics } from "./geometry";
 import { getStroke } from "perfect-freehand";
@@ -107,11 +108,21 @@ export function finishDrawing(
     viewport: [innerWidth, innerHeight],
   };
 }
-const liveAnchors = new WeakMap<Drawing, Element>();
+const liveAnchors = new WeakMap<
+  Drawing,
+  { element: Element | null; revision: number }
+>();
 /** Editing and painting must use the same identity-validated element. */
 export function drawingElement(d: Drawing): Element | null {
   if (!d.element) return null;
-  let el: Element | null = liveAnchors.get(d) ?? null;
+  const revision = contentRevision();
+  const cached = liveAnchors.get(d);
+  if (
+    cached?.revision === revision &&
+    (!cached.element || cached.element.isConnected)
+  )
+    return cached.element;
+  let el: Element | null = cached?.element ?? null;
   try {
     if (!el?.isConnected) el = queryPath(d.element.path);
   } catch {}
@@ -127,8 +138,8 @@ export function drawingElement(d: Drawing): Element | null {
     const candidates = queryAll(d.element.tag).filter(valid);
     el = candidates.length === 1 ? candidates[0]! : null;
   }
+  liveAnchors.set(d, { element: el, revision });
   if (!el) return null;
-  liveAnchors.set(d, el);
   return el;
 }
 export function resolveDrawing(d: Drawing): {

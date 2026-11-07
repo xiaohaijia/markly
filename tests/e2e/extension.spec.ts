@@ -1072,3 +1072,251 @@ test("inline text keeps failed autosave content and retries", async () => {
   );
   await page.close();
 });
+
+test("text selection outline follows painted glyphs after saving, dragging and reopening", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(article + "?text-outline");
+  await page.getByRole("button", { name: "文字", exact: true }).click();
+  await page.mouse.click(350, 350);
+  const field = page.getByRole("textbox", { name: "图中文字" });
+  const content = "你好宝宝宝宝宝宝\n第二行🧠";
+  await field.fill(content);
+  await field.press("Control+Enter");
+  const text = page.getByTestId("drawing-layer").locator("text");
+  await expect(text).toHaveCount(1);
+  const outline = page
+    .getByTestId("drawing-layer")
+    .locator("rect[stroke-dasharray]");
+  async function checkOutline() {
+    await expect(outline).toHaveCount(1);
+    const t = (await text.boundingBox())!,
+      b = (await outline.boundingBox())!;
+    expect(Math.abs(b.x - (t.x - 6))).toBeLessThan(1);
+    expect(Math.abs(b.y - (t.y - 6))).toBeLessThan(1);
+    expect(Math.abs(b.width - t.width - 13)).toBeLessThan(1);
+    expect(Math.abs(b.height - t.height - 13)).toBeLessThan(1);
+  }
+  await text.click();
+  await checkOutline();
+  await page.screenshot({ path: "artifacts/text-outline-fixed.png" });
+  let t = (await text.boundingBox())!;
+  await page.mouse.move(t.x + 10, t.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(t.x + 50, t.y + 28, { steps: 4 });
+  await page.mouse.up();
+  await checkOutline();
+  await text.dblclick();
+  await expect(field).toHaveValue(content);
+  await expect(outline).toHaveCount(0);
+  await field.fill(content + "\n再补一行");
+  await field.press("Control+Enter");
+  await page.reload();
+  await expect(text).toHaveCount(1);
+  await text.click();
+  await checkOutline();
+  await page.close();
+});
+
+test("scroll paint keeps markers aligned on every sampled frame", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(
+    "http://127.0.0.1:4173/fixtures/compatibility.html?scroll-frames",
+  );
+  await select(page, "#copy");
+  await page.getByRole("button", { name: "下划线", exact: true }).click();
+  await page.getByRole("button", { name: "矩形", exact: true }).click();
+  const b = (await page.locator("#copy").boundingBox())!;
+  await page.mouse.move(b.x + 10, b.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 150, b.y + 25);
+  await page.mouse.up();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByTestId("drawing-layer").locator(":scope > g > rect[rx]"),
+  ).toHaveCount(1);
+  const results = await page.evaluate(async () => {
+    const root = document.querySelector("markly-extension")!.shadowRoot!;
+    const target = document.querySelector("#copy")!;
+    const shape = root.querySelector(
+      'svg[data-testid="drawing-layer"] > g > rect[rx]',
+    )!;
+    const line = root.querySelector('svg[data-testid="text-marks"] line')!;
+    const base = target.getBoundingClientRect().top;
+    const shapeOffset = shape.getBoundingClientRect().top - base;
+    const lineOffset = line.getBoundingClientRect().top - base;
+    const samples: { shape: number; line: number }[] = [];
+    for (const mode of ["inner", "outer"]) {
+      for (let i = 0; i < 10; i++) {
+        await new Promise<void>((resolve) => {
+          const listener = () => {
+            document.removeEventListener("scroll", listener, true);
+            requestAnimationFrame(() => {
+              const top = target.getBoundingClientRect().top;
+              samples.push({
+                shape: Math.abs(
+                  shape.getBoundingClientRect().top - top - shapeOffset,
+                ),
+                line: Math.abs(
+                  line.getBoundingClientRect().top - top - lineOffset,
+                ),
+              });
+              resolve();
+            });
+          };
+          document.addEventListener("scroll", listener, true);
+          if (mode === "inner")
+            document.querySelector("#scroll")!.scrollTop += 3.5;
+          else window.scrollBy(0, 3.5);
+        });
+      }
+    }
+    return samples;
+  });
+  expect(results).toHaveLength(20);
+  expect(Math.max(...results.map((s) => s.shape))).toBeLessThan(1);
+  expect(Math.max(...results.map((s) => s.line))).toBeLessThan(1);
+  await select(page, "#copy");
+  await page.getByRole("button", { name: "备注", exact: true }).click();
+  await page.getByRole("textbox", { name: "备注内容" }).fill("边缘跟随检查");
+  await page.getByRole("button", { name: "保存备注", exact: true }).click();
+  const marker = page.getByRole("button", { name: "查看备注", exact: true });
+  await expect(marker).toHaveCount(1);
+  const markerInset =
+    (await marker.boundingBox())!.y -
+    (await page.locator("#copy").boundingBox())!.y;
+  await page.evaluate(() =>
+    scrollBy(
+      0,
+      document.querySelector("#copy")!.getBoundingClientRect().top - 10,
+    ),
+  );
+  await expect
+    .poll(async () => {
+      const m = (await marker.boundingBox())!;
+      const t = (await page.locator("#copy").boundingBox())!;
+      return Math.abs(m.y - t.y - markerInset);
+    })
+    .toBeLessThan(1);
+  // Cached geometry cannot authorize a different recycled post.
+  await page
+    .locator("article a")
+    .evaluate(
+      (el) =>
+        ((el as HTMLAnchorElement).href = "https://x.com/test/status/recycled"),
+    );
+  await expect(
+    page.getByTestId("drawing-layer").locator(":scope > g > rect[rx]"),
+  ).toHaveCount(0);
+  await page.close();
+});
+
+test("note reader has a consistent width and scrolls long content", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(article + "?note-reader-design");
+  const field = page.getByRole("textbox", { name: "备注内容" });
+  const marker = page.getByRole("button", { name: "查看备注", exact: true });
+  for (const [i, note] of [
+    "这里值得再想一想。",
+    "我的理解是：\n工具应该让思考更自然。\n\n留住想法，再继续阅读。",
+    Array.from(
+      { length: 35 },
+      (_, j) => "第" + (j + 1) + "行：一些需要慢慢回看的想法。",
+    ).join("\n"),
+  ].entries()) {
+    if (i === 0) {
+      await page.getByRole("button", { name: "页面备注", exact: true }).click();
+      await page.mouse.click(900, 450);
+    } else await marker.click();
+    await field.fill(note);
+    await page.getByRole("button", { name: "保存备注", exact: true }).click();
+    await expect(field).toHaveCount(0);
+    await marker.hover();
+    const card = page
+      .getByRole("tooltip")
+      .filter({ hasText: note.split("\n")[0] });
+    await expect(card).toBeVisible();
+    await card.hover();
+    const b = (await card.boundingBox())!;
+    expect(b.width).toBe(264);
+    expect(b.x).toBeGreaterThanOrEqual(8);
+    expect(b.x + b.width).toBeLessThanOrEqual(1432);
+    if (i === 2) {
+      const body = card
+        .locator("div")
+        .filter({ has: page.locator("p") })
+        .last();
+      expect(
+        await body.evaluate((el) => el.scrollHeight > el.clientHeight),
+      ).toBe(true);
+    }
+    await card.screenshot({ path: "artifacts/note-reader-" + i + ".png" });
+    await page.keyboard.press("Escape");
+    await expect(card).toHaveCount(0);
+  }
+  await page.close();
+});
+
+test("line tools draw, edit and restore single, wavy and parallel marks", async () => {
+  await enableHttp();
+  const page = await context.newPage();
+  await page.goto(article + "?line-tools");
+  await page
+    .getByRole("button", { name: "显示 / 收起批注面板", exact: true })
+    .click();
+  const box = (await page.locator("#quote").boundingBox())!;
+  const layer = page.getByTestId("drawing-layer");
+  const paths = layer.locator(":scope > g > path[data-line-kind]");
+  let i = 0;
+  for (const [label, kind] of [
+    ["横线", "line"],
+    ["波浪线", "wave"],
+    ["双横线", "double"],
+  ]) {
+    await page.getByRole("button", { name: "线条工具", exact: true }).click();
+    await page.getByRole("menuitemradio", { name: label, exact: true }).click();
+    await expect(page.getByRole("menu", { name: "选择线条" })).toHaveCount(0);
+    const y = box.y + 10 + i * 18;
+    await page.mouse.move(box.x + 180, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 20, y + 12, { steps: 5 });
+    await page.mouse.up();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("annotation-card")).toHaveCount(++i);
+    await expect(paths).toHaveCount(i);
+    const path = layer.locator(
+      ':scope > g > path[data-line-kind="' + kind + '"]',
+    );
+    const p = (await path.boundingBox())!;
+    expect(p.width).toBeGreaterThan(158);
+    expect(p.height).toBeLessThan(9);
+  }
+  await page.getByRole("button", { name: "撤销", exact: true }).click();
+  await expect(paths).toHaveCount(2);
+  await page.getByRole("button", { name: "重做", exact: true }).click();
+  await expect(paths).toHaveCount(3);
+  const line = layer.locator(':scope > g > path[data-line-kind="line"]');
+  const b = (await line.boundingBox())!;
+  await page.mouse.move(b.x + 50, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 70, b.y + b.height / 2 + 8, { steps: 4 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await line.boundingBox())!.x)
+    .toBeCloseTo(b.x + 20, 0);
+  await page.reload();
+  await expect(paths).toHaveCount(3);
+  await page.getByRole("button", { name: "线条工具", exact: true }).click();
+  await expect(
+    page.getByRole("menuitemradio", { name: "双横线", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+  await page.screenshot({ path: "artifacts/line-tools.png" });
+  await page.keyboard.press("Escape");
+  const hit = (await line.boundingBox())!;
+  await page.mouse.click(hit.x + hit.width / 2, hit.y + hit.height / 2);
+  await page.keyboard.press("Delete");
+  await expect(paths).toHaveCount(2);
+  await page.close();
+});

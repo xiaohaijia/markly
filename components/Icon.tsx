@@ -1,3 +1,4 @@
+import { LineIcon } from "./LineTool";
 import {
   PencilSimple,
   Cursor,
@@ -58,8 +59,10 @@ const icons = {
   link: LinkSimple,
   save: FloppyDisk,
 };
-export type IconName = keyof typeof icons;
+export type IconName = keyof typeof icons | "line" | "wave" | "double";
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
+  if (name === "line" || name === "wave" || name === "double")
+    return <LineIcon kind={name} width={size} />;
   const Component = icons[name];
   return <Component size={size} weight="regular" aria-hidden="true" />;
 }

@@ -1,3 +1,4 @@
+import { invalidateContent } from "./content-clock";
 import { isPluginNode, openRoots } from "./dom";
 
 type Options = { geometry(): void; content(): void; route(url: string): void };
@@ -25,6 +26,7 @@ export function observePage(options: Options) {
     }
     if (dirtyText) {
       dirtyText = false;
+      invalidateContent();
       options.content();
     }
     options.geometry();
@@ -43,7 +45,9 @@ export function observePage(options: Options) {
       relevant.some(
         (r) =>
           r.type !== "attributes" ||
-          ["hidden", "aria-hidden"].includes(r.attributeName ?? ""),
+          ["hidden", "aria-hidden", "href", "src", "srcset"].includes(
+            r.attributeName ?? "",
+          ),
       ),
     );
     for (const r of relevant)
@@ -75,6 +79,7 @@ export function observePage(options: Options) {
           "style",
           "hidden",
           "aria-hidden",
+          "href",
           "src",
           "srcset",
           "open",

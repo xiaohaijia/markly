@@ -1,5 +1,5 @@
 import { useGeometry } from "../lib/runtime/geometry-clock";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   bounds,
   drawingElement,
@@ -15,6 +15,7 @@ import {
   type Drawing,
   type Point,
 } from "../lib/model";
+import { isLine, linePath } from "../lib/lines";
 import { textLines } from "../lib/text-layout";
 import s from "./Markly.module.css";
 export type Tool = "pointer" | "note" | Drawing["tool"];
@@ -31,6 +32,18 @@ export function Shape({
   const first = points[0]!,
     last = points.at(-1)!;
   const box = bounds(points);
+  if (isLine(drawing.tool))
+    return (
+      <path
+        data-line-kind={drawing.tool}
+        d={linePath(drawing.tool, first, last)}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    );
   if (drawing.tool === "pen") return <path d={freehand(points)} fill={color} />;
   if (drawing.tool === "rect")
     return (
@@ -76,6 +89,57 @@ export function Shape({
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+  );
+}
+/** Text points describe the baseline origin, never its painted dimensions. */
+function TextSelectionBox({
+  drawing,
+  points,
+}: {
+  drawing: Drawing;
+  points: Point[];
+}) {
+  const ref = useRef<SVGGElement>(null);
+  const [box, setBox] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const revision = useGeometry();
+  useLayoutEffect(() => {
+    const text = ref.current?.parentElement?.querySelector("text");
+    if (!text) {
+      setBox(null);
+      return;
+    }
+    const b = text.getBBox();
+    const next = { x: b.x, y: b.y, width: b.width, height: b.height };
+    setBox((old) =>
+      old &&
+      old.x === next.x &&
+      old.y === next.y &&
+      old.width === next.width &&
+      old.height === next.height
+        ? old
+        : next,
+    );
+  }, [drawing, points, revision]);
+  return (
+    <g ref={ref} aria-hidden="true">
+      {box && (
+        <rect
+          x={box.x - 6}
+          y={box.y - 6}
+          width={Math.max(1, box.width) + 12}
+          height={Math.max(1, box.height) + 12}
+          fill="transparent"
+          stroke="#708970"
+          strokeDasharray="4 3"
+          style={{ pointerEvents: "none" }}
+        />
+      )}
+    </g>
   );
 }
 export function DrawingLayer({
@@ -204,7 +268,7 @@ export function DrawingLayer({
           ? g.points.length < 19999
             ? [...g.points, p]
             : g.points
-          : [g.start, p];
+          : [g.start, isLine(tool) ? [p[0], g.start[1], p[2]] : p];
       setDraft(g.points);
     } else if (g.annotation && g.rendered) {
       const dx = p[0] - g.start[0],
@@ -361,11 +425,16 @@ export function DrawingLayer({
                   />
                 </g>
               )}
-              {selected === a.id && b && (
+              {selected === a.id &&
+                points.length > 0 &&
+                a.drawing.tool === "text" && (
+                  <TextSelectionBox drawing={a.drawing} points={points} />
+                )}
+              {selected === a.id && b && a.drawing.tool !== "text" && (
                 <>
                   <rect
                     x={b.x - 6}
-                    y={b.y - 6}
+                    y={isLine(a.drawing.tool) ? b.y - 16 : b.y - 6}
                     width={Math.max(20, b.width) + 12}
                     height={Math.max(20, b.height) + 12}
                     fill="transparent"

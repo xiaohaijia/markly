@@ -16,6 +16,9 @@ function excerpt(a: Annotation) {
       rect: "矩形标注",
       ellipse: "圈选标注",
       arrow: "箭头标注",
+      line: "横线",
+      wave: "波浪线",
+      double: "双横线",
       text: "文字标注",
     }[a.drawing.tool]
   );

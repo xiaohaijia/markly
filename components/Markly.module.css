@@ -287,11 +287,6 @@
   border-top: 1px solid var(--line);
   padding: 8px 16px 12px;
 }
-.footer > button {
-  width: 100%;
-  font-size: 13px;
-  background: #f0f2ec;
-}
 .status {
   display: flex;
   align-items: center;
@@ -643,21 +638,6 @@
 .compactNote button {
   padding: 0;
 }
-.notePreview {
-  position: fixed;
-  width: 260px;
-  max-height: 190px;
-  overflow: auto;
-  padding: 14px;
-  border: 1px solid #f3e9c0;
-  border-radius: 12px;
-  background: #fff7d5;
-  box-shadow: 0 8px 26px #49432324;
-  cursor: default;
-}
-.notePreview small {
-  color: #83784d;
-}
 .discard {
   padding: 12px;
   margin-top: 12px;
@@ -740,13 +720,9 @@
   border: 1px dashed #aa923f;
   border-radius: 7px;
 }
-.notePreview {
-  max-width: calc(100vw - 8px);
-}
 
 /* Warm paper surfaces from 0.2.4. */
-.paperEditor,
-.compactNote .notePreview {
+.paperEditor {
   color: var(--ink);
   background: #fcfbf8;
   border: 1px solid #dbdfd5;
@@ -814,18 +790,6 @@
   color: #476247;
   background: #ecf0e7;
   border-color: #c9d4c3;
-}
-.compactNote .notePreview {
-  -webkit-user-select: text;
-  user-select: text;
-  border-left: 3px solid #90a58a;
-  width: max-content;
-  max-height: min(190px, 45vh);
-  padding: 9px 12px 9px 15px;
-}
-.compactNote .notePreview p {
-  font-size: 13px;
-  line-height: 1.65;
 }
 
 .compactNote:has(.notePreview) {
@@ -945,21 +909,10 @@
 }
 .panel .footer {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  padding: 10px 16px;
-}
-.panel .footer > button {
-  width: auto;
-  background: transparent;
-  color: #486449;
-  font-weight: 550;
-  padding: 5px 4px;
-}
-.panel .footer > button:hover {
-  background: #edf1e9;
+  padding: 8px 18px;
+  min-height: 34px;
 }
 .panel .status {
   margin: 0;
@@ -1014,4 +967,97 @@
   border: 1px solid #e3c6c2;
   border-radius: 5px;
   padding: 6px;
+}
+
+/* Read-only notes share the toolbar's quiet paper and sage details. */
+.notePreview {
+  position: fixed;
+  width: min(264px, calc(100vw - 16px));
+  padding: 14px 16px 16px;
+  border: 1px solid #dfe3d8;
+  border-radius: 10px;
+  background: #fdfcf9;
+  box-shadow:
+    0 2px 4px #26352706,
+    0 8px 24px #26352712;
+  color: var(--ink);
+  cursor: default;
+  user-select: text;
+}
+.previewLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #687d62;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  margin-bottom: 8px;
+}
+.previewBody {
+  max-height: min(230px, calc(45vh - 54px));
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c2cabb transparent;
+  overscroll-behavior: contain;
+}
+.notePreview .previewBody p {
+  font-size: 14px;
+  line-height: 1.75;
+  color: #30392d;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.notePreview[data-side="right"]::before,
+.notePreview[data-side="left"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+}
+.notePreview[data-side="right"]::before {
+  right: 100%;
+}
+.notePreview[data-side="left"]::before {
+  left: 100%;
+}
+.notePreview[data-side="right"]::after,
+.notePreview[data-side="left"]::after {
+  content: "";
+  position: absolute;
+  top: var(--note-connector-y);
+  height: 1px;
+  width: 8px;
+  background: #c4cebe;
+}
+.notePreview[data-side="right"]::after {
+  right: 100%;
+}
+.notePreview[data-side="left"]::after {
+  left: 100%;
+}
+.lineMenu {
+  position: fixed;
+  z-index: 8;
+  width: 158px;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  background: #fcfbf8;
+  border: 1px solid #dfe3d8;
+  border-radius: 9px;
+  box-shadow: 0 5px 20px #26352718;
+  pointer-events: auto;
+}
+.root .lineMenu button {
+  width: 100%;
+  height: 36px;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.lineMenu button[aria-checked="true"] {
+  background: #e8ede5;
+  color: #43664a;
 }
